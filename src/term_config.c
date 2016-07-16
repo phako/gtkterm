@@ -45,7 +45,6 @@
 #include "serie.h"
 #include "term_config.h"
 #include "widgets.h"
-#include "parsecfg.h"
 #include "macros.h"
 #include "i18n.h"
 #include "config.h"
@@ -62,64 +61,6 @@ const gchar *devices_to_check[] = {
     NULL
 };
 
-/* Configuration file variables */
-gchar **port;
-gint *speed;
-gint *bits;
-gint *stopbits;
-gchar **parity;
-gchar **flow;
-gint *wait_delay;
-gint *wait_char;
-gint *rts_time_before_tx;
-gint *rts_time_after_tx;
-gint *echo;
-gint *crlfauto;
-cfgList **macro_list = NULL;
-gchar **font;
-
-gint *show_cursor;
-gint *rows;
-gint *columns;
-gint *scrollback;
-gint *visual_bell;
-gint *foreground_red;
-gint *foreground_blue;
-gint *foreground_green;
-gint *background_red;
-gint *background_blue;
-gint *background_green;
-
-
-cfgStruct cfg[] = {
-    {"port", CFG_STRING, &port},
-    {"speed", CFG_INT, &speed},
-    {"bits", CFG_INT, &bits},
-    {"stopbits", CFG_INT, &stopbits},
-    {"parity", CFG_STRING, &parity},
-    {"flow", CFG_STRING, &flow},
-    {"wait_delay", CFG_INT, &wait_delay},
-    {"wait_char", CFG_INT, &wait_char},
-    {"rs485_rts_time_before_tx", CFG_INT, &rts_time_before_tx},
-    {"rs485_rts_time_after_tx", CFG_INT, &rts_time_after_tx},
-    {"echo", CFG_BOOL, &echo},
-    {"crlfauto", CFG_BOOL, &crlfauto},
-    {"font", CFG_STRING, &font},
-    {"macros", CFG_STRING_LIST, &macro_list},
-    {"term_show_cursor", CFG_BOOL, &show_cursor},
-    {"term_rows", CFG_INT, &rows},
-    {"term_columns", CFG_INT, &columns},
-    {"term_scrollback", CFG_INT, &scrollback},
-    {"term_visual_bell", CFG_BOOL, &visual_bell},
-    {"term_foreground_red", CFG_INT, &foreground_red},
-    {"term_foreground_blue", CFG_INT, &foreground_blue},
-    {"term_foreground_green", CFG_INT, &foreground_green},
-    {"term_background_red", CFG_INT, &background_red},
-    {"term_background_blue", CFG_INT, &background_blue},
-    {"term_background_green", CFG_INT, &background_green},
-    {NULL, CFG_END, NULL}
-};
-
 gchar *config_file;
 
 struct configuration_port config;
@@ -130,14 +71,14 @@ GtkWidget *Entry;
 gint Grise_Degrise(GtkWidget *bouton, gpointer pointeur);
 void read_font_button(GtkFontButton *fontButton);
 void Hard_default_configuration(void);
-void Copy_configuration(int);
+void Copy_configuration(GKeyFile *, const char *section);
 
 static void Select_config(gchar *, void *);
 static void Save_config_file(void);
 static void load_config(GtkDialog *, gint, GtkTreeSelection *);
 static void delete_config(GtkDialog *, gint, GtkTreeSelection *);
 static void save_config(GtkDialog *, gint, GtkWidget *);
-static void really_save_config(GtkDialog *, gint, gpointer);
+void really_save_config(GKeyFile *config, const char *section);
 static gint remove_section(gchar *, gchar *);
 static void Curseur_OnOff(GtkWidget *, gpointer);
 static void Selec_couleur(GdkRGBA *, gfloat, gfloat, gfloat);
@@ -388,7 +329,7 @@ void Select_config(gchar *title, void *callback)
 {
     GtkWidget *dialog;
     GtkWidget *content_area;
-    gint i, max;
+    gint i;
 
     GtkWidget *Frame, *Scroll, *Liste, *Label;
     gchar *texte_label;
@@ -398,6 +339,10 @@ void Select_config(gchar *title, void *callback)
     GtkCellRenderer *renderer;
     GtkTreeViewColumn *Colonne;
     GtkTreeSelection *Selection_Liste;
+    GKeyFile *config;
+    GError *error = NULL;
+    char **groups = NULL;
+    gsize groups_size = 0;
 
     enum
     {
@@ -407,12 +352,11 @@ void Select_config(gchar *title, void *callback)
 
     /* Parse the config file */
 
-    max = cfgParse(config_file, cfg, CFG_INI);
-
-    if(max == -1)
-    {
-	show_message(_("Cannot read configuration file!\n"), MSG_ERR);
-	return;
+    config = g_key_file_new ();
+    if (!g_key_file_load_from_file (config, config_file, G_KEY_FILE_NONE, &error)) {
+        g_debug ("Error reading configuration file: %s", error->message);
+        g_error_free (error);
+        show_message(_("Cannot read configuration file!\n"), MSG_ERR);
     }
 
     else
@@ -463,11 +407,16 @@ void Select_config(gchar *title, void *callback)
 	gtk_tree_view_append_column(GTK_TREE_VIEW(Liste), Colonne);
 
 
-	for(i = 0; i < max; i++)
+    groups = g_key_file_get_groups (config, &groups_size);
+
+	for(i = 0; i < groups_size; i++)
 	{
 	    gtk_list_store_append(Modele_Liste, &iter_Liste);
-	    gtk_list_store_set(Modele_Liste, &iter_Liste, N_texte, cfgSectionNumberToName(i), -1);
+	    gtk_list_store_set(Modele_Liste, &iter_Liste, N_texte, groups[i], -1);
 	}
+
+    g_clear_pointer (&groups, g_strfreev);
+    g_clear_pointer (&config, g_key_file_unref);
 
 	gtk_widget_set_size_request(GTK_WIDGET(dialog), 200, 200);
 
@@ -517,103 +466,66 @@ void Save_config_file(void)
     gtk_widget_show_all (dialog);
 }
 
-void really_save_config(GtkDialog *dialog, gint response_id, gpointer data)
+void really_save_config(GKeyFile *config, const char *section)
 {
     int max, cfg_num, i;
     gchar *string = NULL;
+    GError *error = NULL;
 
     cfg_num = -1;
 
-    if(response_id == GTK_RESPONSE_ACCEPT)
-    {
-	max = cfgParse(config_file, cfg, CFG_INI);
+    Copy_configuration(config, section);
+    g_key_file_save_to_file (config, config_file, &error);
 
-	if(max == -1)
-	    return;
-
-	for(i = 0; i < max; i++)
-	{
-	    if(!strcmp((char *)data, cfgSectionNumberToName(i)))
-		cfg_num = i;
-	}
-
-	/* not overwriting */
-	if(cfg_num == -1)
-	{
-	    max = cfgAllocForNewSection(cfg, (char *)data);
-	    cfg_num = max - 1;
-	}
-	else
-	{
-	    if(remove_section(config_file, (char *)data) == -1)
-	    {
-		show_message(_("Cannot overwrite section!"), MSG_ERR);
-		return;
-	    }
-	    if(max == cfgParse(config_file, cfg, CFG_INI))
-	    {
-		show_message(_("Cannot read configuration file!"), MSG_ERR);
-		return;
-	    }
-	    max = cfgAllocForNewSection(cfg, (char *)data);
-	    cfg_num = max - 1;
-	}
-
-	Copy_configuration(cfg_num);
-	cfgDump(config_file, cfg, CFG_INI, max);
-
-	string = g_strdup_printf(_("Configuration [%s] saved\n"), (char *)data);
-	show_message(string, MSG_WRN);
-	g_free(string);
-    }
-    else
-	Save_config_file();
+    string = g_strdup_printf(_("Configuration [%s] saved\n"), section);
+    show_message(string, MSG_WRN);
+    g_free(string);
 }
 
 void save_config(GtkDialog *dialog, gint response_id, GtkWidget *edit)
 {
 	int max, i;
 	const gchar *config_name;
+    GKeyFile *config;
+    GError *error = NULL;
 
 	if(response_id == GTK_RESPONSE_ACCEPT)
 	{
-		max = cfgParse(config_file, cfg, CFG_INI);
+        config = g_key_file_new ();
+        if (!g_key_file_load_from_file (config, config_file, G_KEY_FILE_NONE, &error)) {
+            g_debug ("Failed to load config: %s", error->message);
+            g_error_free (error);
+            g_key_file_unref (config);
+            return;
+        }
 
-		if(max == -1)
-			return;
 
-		config_name = gtk_entry_get_text(GTK_ENTRY(edit));
+        config_name = gtk_entry_get_text(GTK_ENTRY(edit));
 
-		for(i = 0; i < max; i++)
-		{
-			if(!strcmp(config_name, cfgSectionNumberToName(i)))
-			{
-				GtkWidget *message_dialog;
-				message_dialog = gtk_message_dialog_new_with_markup(GTK_WINDOW(Fenetre),
-				                     GTK_DIALOG_DESTROY_WITH_PARENT,
-				                     GTK_MESSAGE_QUESTION,
-				                     GTK_BUTTONS_NONE,
-				                     _("<b>Section [%s] already exists.</b>\n\nDo you want to overwrite it ?"),
-				                     config_name);
+        if (g_key_file_has_group(config, config_name)) {
+            GtkWidget *message_dialog;
+            message_dialog = gtk_message_dialog_new_with_markup(GTK_WINDOW(Fenetre),
+                    GTK_DIALOG_DESTROY_WITH_PARENT,
+                    GTK_MESSAGE_QUESTION,
+                    GTK_BUTTONS_NONE,
+                    _("<b>Section [%s] already exists.</b>\n\nDo you want to overwrite it ?"),
+                    config_name);
 
-				gtk_dialog_add_buttons(GTK_DIALOG(message_dialog),
+            gtk_dialog_add_buttons(GTK_DIALOG(message_dialog),
                                        _("_Cancel"),
-				                       GTK_RESPONSE_NONE,
+                    GTK_RESPONSE_NONE,
                                        _("_OK"),
-				                       GTK_RESPONSE_ACCEPT,
-				                       NULL);
+                    GTK_RESPONSE_ACCEPT,
+                    NULL);
 
-				if (gtk_dialog_run(GTK_DIALOG(message_dialog)) == GTK_RESPONSE_ACCEPT)
-					really_save_config(NULL, GTK_RESPONSE_ACCEPT, (gpointer)config_name);
+            if (gtk_dialog_run(GTK_DIALOG(message_dialog)) == GTK_RESPONSE_ACCEPT)
+                really_save_config(config, config_name);
 
-				gtk_widget_destroy(message_dialog);
-
-				i = max + 1;
-			}
-		}
-		if(i == max) /* Section does not exist */
-			really_save_config(NULL, GTK_RESPONSE_ACCEPT, (gpointer)config_name);
-	}
+            gtk_widget_destroy(message_dialog);
+        }
+        else
+            really_save_config(config, config_name);
+    }
 }
 
 void load_config(GtkDialog *dialog, gint response_id, GtkTreeSelection *Selection_Liste)
@@ -626,7 +538,7 @@ void load_config(GtkDialog *dialog, gint response_id, GtkTreeSelection *Selectio
     {
 	if(gtk_tree_selection_get_selected(Selection_Liste, &Modele, &iter))
 	{
-	    gtk_tree_model_get(GTK_TREE_MODEL(Modele), &iter, 0, (gint *)&txt, -1);
+	    gtk_tree_model_get(GTK_TREE_MODEL(Modele), &iter, 0, &txt, -1);
 	    Load_configuration_from_file(txt);
 	    Verify_configuration();
 	    Config_port();
@@ -657,176 +569,131 @@ void delete_config(GtkDialog *dialog, gint response_id, GtkTreeSelection *Select
     }
 }
 
-gint Load_configuration_from_file(const gchar *config_name)
+gint Load_configuration_from_file(const gchar *section)
 {
-    int max, i, j, size;
-    size_t k;
+    GKeyFile *config_object = NULL;
+    GError *error = NULL;
+    gchar *str = NULL;
+    int value = 0;
+
     gchar *string = NULL;
-    gchar *str;
     macro_t *macros = NULL;
-    cfgList *t;
 
-    max = cfgParse(config_file, cfg, CFG_INI);
+    config_object = g_key_file_new ();
+    if (!g_key_file_load_from_file (config_object, config_file, G_KEY_FILE_NONE, &error)) {
+        g_debug ("Failed to load configuration file: %s", error->message);
+        g_error_free (error);
+        g_key_file_unref (config_object);
 
-    if(max == -1)
-	return -1;
+        return -1;
+    }
 
-    else
-    {
-	for(i = 0; i < max; i++)
-	{
-	    if(!strcmp(config_name, cfgSectionNumberToName(i)))
-	    {
-		Hard_default_configuration();
+    if (!g_key_file_has_group (config_object, section)) {
+        string = g_strdup_printf(_("No section \"%s\" in configuration file\n"), section);
+        show_message(string, MSG_ERR);
+        g_free(string);
+        g_key_file_unref (config_object);
+        return -1;
+   }
 
-		if(port[i] != NULL)
-		    strcpy(config.port, port[i]);
-		if(speed[i] != 0)
-		    config.vitesse = speed[i];
-		if(bits[i] != 0)
-		    config.bits = bits[i];
-		if(stopbits[i] != 0)
-		    config.stops = stopbits[i];
-		if(parity[i] != NULL)
-		{
-		    if(!g_ascii_strcasecmp(parity[i], "none"))
-			config.parite = 0;
-		    else if(!g_ascii_strcasecmp(parity[i], "odd"))
-			config.parite = 1;
-		    else if(!g_ascii_strcasecmp(parity[i], "even"))
-			config.parite = 2;
-		}
-		if(flow[i] != NULL)
-		{
-		    if(!g_ascii_strcasecmp(flow[i], "none"))
-			config.flux = 0;
-		    else if(!g_ascii_strcasecmp(flow[i], "xon"))
-			config.flux = 1;
-		    else if(!g_ascii_strcasecmp(flow[i], "rts"))
-			config.flux = 2;
-		    else if(!g_ascii_strcasecmp(flow[i], "rs485"))
-			config.flux = 3;
-		}
+    Hard_default_configuration();
+    str = g_key_file_get_string (config_object, section, "port", NULL);
+    if (str != NULL) {
+        strncpy (config.port, str, sizeof (config.port));
+        g_free (str);
+    }
 
-		config.delai = wait_delay[i];
+    value = g_key_file_get_integer (config_object, section, "speed", NULL);
+    if (value != 0) {
+        config.vitesse = value;
+    }
 
-		if(wait_char[i] != 0)
-		    config.car = (signed char)wait_char[i];
-		else
-		    config.car = -1;
+    value = g_key_file_get_integer (config_object, section, "bits", NULL);
+    if (value != 0) {
+        config.bits = value;
+    }
 
-		config.rs485_rts_time_before_transmit = rts_time_before_tx[i];
-		config.rs485_rts_time_after_transmit = rts_time_after_tx[i];
+    value = g_key_file_get_integer (config_object, section, "stopbits", NULL);
+    if (value != 0) {
+        config.stops = value;
+    }
 
-		if(echo[i] != -1)
-		    config.echo = (gboolean)echo[i];
-		else
-		    config.echo = FALSE;
+    str = g_key_file_get_string (config_object, section, "parity", NULL);
+    if (str != NULL) {
+        if(!g_ascii_strcasecmp(str, "none"))
+            config.parite = 0;
+        else if(!g_ascii_strcasecmp(str, "odd"))
+            config.parite = 1;
+        else if(!g_ascii_strcasecmp(str, "even"))
+            config.parite = 2;
+        g_free (str);
+    }
 
-		if(crlfauto[i] != -1)
-		    config.crlfauto = (gboolean)crlfauto[i];
-		else
-		    config.crlfauto = FALSE;
+    str = g_key_file_get_string (config_object, section, "flow", NULL);
+    if (str != NULL) {
+        if(!g_ascii_strcasecmp(str, "none"))
+            config.flux = 0;
+        else if(!g_ascii_strcasecmp(str, "xon"))
+            config.flux = 1;
+        else if(!g_ascii_strcasecmp(str, "rts"))
+            config.flux = 2;
+        else if(!g_ascii_strcasecmp(str, "rs485"))
+            config.flux = 3;
+        g_free (str);
+    }
+
+    config.delai = g_key_file_get_integer (config_object, section, "wait_delay", NULL);
+
+    value = g_key_file_get_integer (config_object, section, "wait_char", NULL);
+    if (value != 0) {
+        config.car = (signed char) value;
+    } else {
+        config.car = -1;
+    }
+    config.rs485_rts_time_before_transmit = g_key_file_get_integer (config_object, section, "rs485_rts_time_before_tx", NULL);
+    config.rs485_rts_time_after_transmit = g_key_file_get_integer (config_object, section, "rs485_rts_time_after_tx", NULL);
+    config.echo = g_key_file_get_boolean (config_object, section, "echo", NULL);
+    config.crlfauto = g_key_file_get_boolean (config_object, section, "crlfauto", NULL);
 
         g_clear_pointer (&term_conf.font, pango_font_description_free);
-        term_conf.font = pango_font_description_from_string (font[i]);
+    str = g_key_file_get_string (config_object, section, "font", NULL);
+    term_conf.font = pango_font_description_from_string (str);
+    g_free (str);
 
-		t = macro_list[i];
-		size = 0;
-		if(t != NULL)
-		{
-		    size++;
-		    while(t->next != NULL)
-		    {
-			t = t->next;
-			size++;
-		    }
-		}
+    /* FIXME: Fix macros */
+    remove_shortcuts ();
 
-		if(size != 0)
-		{
-		    t = macro_list[i];
-		    macros = g_malloc(size * sizeof(macro_t));
-		    if(macros == NULL)
-		    {
-			perror("malloc");
-			return -1;
-		    }
-		    for(j = 0; j < size; j++)
-		    {
-			for(k = 0; k < (strlen(t->str) - 1); k++)
-			{
-			    if((t->str[k] == ':') && (t->str[k + 1] == ':'))
-				break;
-			}
-			macros[j].shortcut = g_strndup(t->str, k);
-			str = &(t->str[k + 2]);
-			macros[j].action = g_strdup(str);
+    term_conf.show_cursor = g_key_file_get_boolean (config_object, section, "term_show_cursor", NULL);
+    term_conf.rows = g_key_file_get_integer (config_object, section, "term_rows", NULL);
+    term_conf.columns = g_key_file_get_integer (config_object, section, "term_columns", NULL);
 
-			t = t->next;
-		    }
-		}
+    value = g_key_file_get_integer (config_object, section, "term_scrollback", NULL);
+    if (value != 0) {
+        term_conf.scrollback = value;
+    }
 
-		remove_shortcuts();
-		create_shortcuts(macros, size);
-		g_free(macros);
+    term_conf.visual_bell = g_key_file_get_boolean (config_object, section, "term_visual_bell", NULL);
+    term_conf.foreground_color.red = g_key_file_get_integer (config_object, section, "term_foreground_red", NULL);
+    term_conf.foreground_color.green = g_key_file_get_integer (config_object, section, "term_foreground_green", NULL);
+    term_conf.foreground_color.blue = g_key_file_get_integer (config_object, section, "term_foreground_blue", NULL);
+    term_conf.background_color.red = g_key_file_get_integer (config_object, section, "term_background_red", NULL);
+    term_conf.background_color.green = g_key_file_get_integer (config_object, section, "term_background_green", NULL);
+    term_conf.background_color.blue = g_key_file_get_integer (config_object, section, "term_background_blue", NULL);
 
-		if(show_cursor[i] != -1)
-		    term_conf.show_cursor = (gboolean)show_cursor[i];
-		else
-		    term_conf.show_cursor = FALSE;
+    if (term_conf.rows == 0 || term_conf.columns == 0) {
+        term_conf.show_cursor = TRUE;
+        term_conf.rows = 80;
+        term_conf.columns = 25;
+        term_conf.scrollback = DEFAULT_SCROLLBACK;
+        term_conf.visual_bell = FALSE;
 
-		if(rows[i] != 0)
-		    term_conf.rows = rows[i];
+        term_conf.foreground_color.red = 43253;
+        term_conf.foreground_color.green = 43253;
+        term_conf.foreground_color.blue = 43253;
 
-		if(columns[i] != 0)
-		    term_conf.columns = columns[i];
-
-		if(scrollback[i] != 0)
-		    term_conf.scrollback = scrollback[i];
-
-		if(visual_bell[i] != -1)
-		    term_conf.visual_bell = (gboolean)visual_bell[i];
-		else
-		    term_conf.visual_bell = FALSE;
-
-		term_conf.foreground_color.red = (double) foreground_red[i] / G_MAXUINT16;
-		term_conf.foreground_color.green = (double) foreground_green[i] / G_MAXUINT16;
-		term_conf.foreground_color.blue = (double) foreground_blue[i] / G_MAXUINT16;
-
-		term_conf.background_color.red = (double) background_red[i] / G_MAXUINT16;
-		term_conf.background_color.green = (double) background_green[i] / G_MAXUINT16;
-		term_conf.background_color.blue = (double) background_blue[i] / G_MAXUINT16;
-
-		/* rows and columns are empty when the conf is autogenerate in the
-		   first save; so set term to default */
-		if(rows[i] == 0 || columns[i] == 0)
-		{
-		    term_conf.show_cursor = TRUE;
-		    term_conf.rows = 80;
-		    term_conf.columns = 25;
-		    term_conf.scrollback = DEFAULT_SCROLLBACK;
-		    term_conf.visual_bell = FALSE;
-
-		    term_conf.foreground_color.red = 43253;
-		    term_conf.foreground_color.green = 43253;
-		    term_conf.foreground_color.blue = 43253;
-
-		    term_conf.background_color.red = 0;
-		    term_conf.background_color.green = 0;
-		    term_conf.background_color.blue = 0;
-		}
-
-		i = max + 1;
-	    }
-	}
-	if(i == max)
-	{
-	    string = g_strdup_printf(_("No section \"%s\" in configuration file\n"), config_name);
-	    show_message(string, MSG_ERR);
-	    g_free(string);
-	    return -1;
-	}
+        term_conf.background_color.red = 0;
+        term_conf.background_color.green = 0;
+        term_conf.background_color.blue = 0;
     }
 
     vte_terminal_set_font (VTE_TERMINAL(display), term_conf.font);
@@ -836,8 +703,8 @@ gint Load_configuration_from_file(const gchar *config_name)
     vte_terminal_set_color_foreground (VTE_TERMINAL(display), (const GdkRGBA *)&term_conf.foreground_color);
     vte_terminal_set_color_background (VTE_TERMINAL(display), (const GdkRGBA *)&term_conf.background_color);
     gtk_widget_queue_draw(display);
-
     return 0;
+
 }
 
 void Verify_configuration(void)
@@ -913,13 +780,21 @@ gint Check_configuration_file(void)
     /* if not, create it, with the [default] section */
     else
     {
+        GKeyFile *config;
+        GError *error = NULL;
+
 	string = g_strdup_printf(_("Configuration file (%s) with\n[default] configuration has been created.\n"), config_file);
 	show_message(string, MSG_WRN);
-	cfgAllocForNewSection(cfg, "default");
-	Hard_default_configuration();
-	Copy_configuration(0);
-	cfgDump(config_file, cfg, CFG_INI, 1);
 	g_free(string);
+
+    config = g_key_file_new ();
+	Hard_default_configuration();
+	Copy_configuration(config, "default");
+    if (!g_key_file_save_to_file (config, config_file, &error)) {
+        g_debug ("Error saving config file: %s", error->message);
+        g_error_free (error);
+    }
+    g_key_file_unref (config);
     }
     return 0;
 }
@@ -951,101 +826,71 @@ void Hard_default_configuration(void)
     Selec_couleur(&term_conf.background_color, 0, 0, 0);
 }
 
-void Copy_configuration(int pos)
+void Copy_configuration(GKeyFile *config_file, const char *section)
 {
     gchar *string = NULL;
     macro_t *macros = NULL;
     gint size, i;
 
-    string = g_strdup(config.port);
-    cfgStoreValue(cfg, "port", string, CFG_INI, pos);
-    g_free(string);
-
-    string = g_strdup_printf("%d", config.vitesse);
-    cfgStoreValue(cfg, "speed", string, CFG_INI, pos);
-    g_free(string);
-
-    string = g_strdup_printf("%d", config.bits);
-    cfgStoreValue(cfg, "bits", string, CFG_INI, pos);
-    g_free(string);
-
-    string = g_strdup_printf("%d", config.stops);
-    cfgStoreValue(cfg, "stopbits", string, CFG_INI, pos);
-    g_free(string);
+    g_key_file_set_string (config_file, section, "port", config.port);
+    g_key_file_set_integer (config_file, section, "speed", config.vitesse);
+    g_key_file_set_integer (config_file, section,"bits", config.bits);
+    g_key_file_set_integer (config_file, section, "stopbits", config.stops);
 
     switch(config.parite)
     {
-	case 0:
-	    string = g_strdup_printf("none");
-	    break;
-	case 1:
-	    string = g_strdup_printf("odd");
-	    break;
-	case 2:
-	    string = g_strdup_printf("even");
-	    break;
-	default:
-	    string = g_strdup_printf("none");
+    case 0:
+        string = g_strdup_printf("none");
+        break;
+    case 1:
+        string = g_strdup_printf("odd");
+        break;
+    case 2:
+        string = g_strdup_printf("even");
+        break;
+    default:
+        string = g_strdup_printf("none");
     }
-    cfgStoreValue(cfg, "parity", string, CFG_INI, pos);
+    g_key_file_set_string (config_file, section, "parity", string);
     g_free(string);
 
     switch(config.flux)
     {
-	case 0:
-	    string = g_strdup_printf("none");
-	    break;
-	case 1:
-	    string = g_strdup_printf("xon");
-	    break;
-	case 2:
-	    string = g_strdup_printf("rts");
-	    break;
-	case 3:
-	    string = g_strdup_printf("rs485");
-	    break;
-	default:
-	    string = g_strdup_printf("none");
+    case 0:
+        string = g_strdup_printf("none");
+        break;
+    case 1:
+        string = g_strdup_printf("xon");
+        break;
+    case 2:
+        string = g_strdup_printf("rts");
+        break;
+    case 3:
+        string = g_strdup_printf("rs485");
+        break;
+    default:
+        string = g_strdup_printf("none");
     }
 
-    cfgStoreValue(cfg, "flow", string, CFG_INI, pos);
+    g_key_file_set_string (config_file, section, "flow", string);
     g_free(string);
 
-    string = g_strdup_printf("%d", config.delai);
-    cfgStoreValue(cfg, "wait_delay", string, CFG_INI, pos);
-    g_free(string);
+    g_key_file_set_integer (config_file, section, "wait_delay", config.delai);
+    g_key_file_set_integer (config_file, section, "wait_char", config.car);
+    g_key_file_set_integer (config_file, section, "rs485_rts_time_before_tx",
+                            config.rs485_rts_time_before_transmit);
+    g_key_file_set_integer (config_file, section, "rs485_rts_time_after_tx",
+                            config.rs485_rts_time_after_transmit);
 
-    string = g_strdup_printf("%d", config.car);
-    cfgStoreValue(cfg, "wait_char", string, CFG_INI, pos);
-    g_free(string);
-
-    string = g_strdup_printf("%d", config.rs485_rts_time_before_transmit);
-    cfgStoreValue(cfg, "rs485_rts_time_before_tx", string, CFG_INI, pos);
-    g_free(string);
-    string = g_strdup_printf("%d", config.rs485_rts_time_after_transmit);
-    cfgStoreValue(cfg, "rs485_rts_time_after_tx", string, CFG_INI, pos);
-    g_free(string);
-
-    if(config.echo == FALSE)
-	string = g_strdup_printf("False");
-    else
-	string = g_strdup_printf("True");
-
-    cfgStoreValue(cfg, "echo", string, CFG_INI, pos);
-    g_free(string);
-
-    if(config.crlfauto == FALSE)
-	string = g_strdup_printf("False");
-    else
-	string = g_strdup_printf("True");
-
-    cfgStoreValue(cfg, "crlfauto", string, CFG_INI, pos);
-    g_free(string);
+    g_key_file_set_boolean (config_file, section, "echo", config.echo);
+    g_key_file_set_boolean (config_file, section, "crlfauto", config.crlfauto);
 
     string = pango_font_description_to_string (term_conf.font);
-    cfgStoreValue(cfg, "font", string, CFG_INI, pos);
+    g_key_file_set_string (config_file, section, "font", string);
     g_free(string);
 
+    /* FIXME: Fix macros! */
+#if 0
     macros = get_shortcuts(&size);
     for(i = 0; i < size; i++)
     {
@@ -1053,52 +898,21 @@ void Copy_configuration(int pos)
 	cfgStoreValue(cfg, "macros", string, CFG_INI, pos);
 	g_free(string);
     }
+#endif
 
-    if(term_conf.show_cursor == FALSE)
-	string = g_strdup_printf("False");
-    else
-	string = g_strdup_printf("True");
-    cfgStoreValue(cfg, "term_show_cursor", string, CFG_INI, pos);
-    g_free(string);
+    g_key_file_set_boolean (config_file, section, "term_show_cursor", term_conf.show_cursor);
+    g_key_file_set_integer (config_file, section, "term_show_rows", term_conf.rows);
+    g_key_file_set_integer (config_file, section, "term_show_columns", term_conf.columns);
+    g_key_file_set_integer (config_file, section, "term_show_scrollback", term_conf.scrollback);
+    g_key_file_set_boolean (config_file, section, "term_show_visual_bell", term_conf.visual_bell);
 
-    string = g_strdup_printf("%d", term_conf.rows);
-    cfgStoreValue(cfg, "term_rows", string, CFG_INI, pos);
-    g_free(string);
+    g_key_file_set_integer (config_file, section, "term_foreground_red", term_conf.foreground_color.red);
+    g_key_file_set_integer (config_file, section, "term_foreground_green", term_conf.foreground_color.green);
+    g_key_file_set_integer (config_file, section, "term_foreground_blue", term_conf.foreground_color.blue);
 
-    string = g_strdup_printf("%d", term_conf.columns);
-    cfgStoreValue(cfg, "term_columns", string, CFG_INI, pos);
-    g_free(string);
-
-    string = g_strdup_printf("%d", term_conf.scrollback);
-    cfgStoreValue(cfg, "term_scrollback", string, CFG_INI, pos);
-    g_free(string);
-
-    if(term_conf.visual_bell == FALSE)
-	string = g_strdup_printf("False");
-    else
-	string = g_strdup_printf("True");
-    cfgStoreValue(cfg, "term_visual_bell", string, CFG_INI, pos);
-    g_free(string);
-
-    string = g_strdup_printf("%u", (guint16) (term_conf.foreground_color.red * G_MAXUINT16));
-    cfgStoreValue(cfg, "term_foreground_red", string, CFG_INI, pos);
-    g_free(string);
-    string = g_strdup_printf("%u", (guint16) (term_conf.foreground_color.green * G_MAXUINT16));
-    cfgStoreValue(cfg, "term_foreground_green", string, CFG_INI, pos);
-    g_free(string);
-    string = g_strdup_printf("%u", (guint16) (term_conf.foreground_color.blue * G_MAXUINT16));
-    cfgStoreValue(cfg, "term_foreground_blue", string, CFG_INI, pos);
-    g_free(string);
-
-    string = g_strdup_printf("%u", (guint16) (term_conf.background_color.red * G_MAXUINT16));
-    cfgStoreValue(cfg, "term_background_red", string, CFG_INI, pos);
-    g_free(string);
-    string = g_strdup_printf("%u", (guint16) (term_conf.background_color.green * G_MAXUINT16));
-    cfgStoreValue(cfg, "term_background_green", string, CFG_INI, pos);
-    g_free(string);
-    string = g_strdup_printf("%u", (guint16) (term_conf.background_color.blue * G_MAXUINT16));
-    cfgStoreValue(cfg, "term_background_blue", string, CFG_INI, pos);
-    g_free(string);
+    g_key_file_set_integer (config_file, section, "term_background_red", term_conf.background_color.red);
+    g_key_file_set_integer (config_file, section, "term_background_green", term_conf.background_color.green);
+    g_key_file_set_integer (config_file, section, "term_background_blue", term_conf.background_color.blue);
 }
 
 
@@ -1247,7 +1061,7 @@ void config_fg_color(GtkWidget *button, gpointer data)
 	vte_terminal_set_color_foreground (VTE_TERMINAL(display), (const GdkRGBA *)&term_conf.foreground_color);
 	gtk_widget_queue_draw (display);
 
-	string = g_strdup_printf ("%u", (guint16) (term_conf.foreground_color.red * G_MAXUINT16));
+#if 0
 	cfgStoreValue (cfg, "term_foreground_red", string, CFG_INI, 0);
 	g_free (string);
 	string = g_strdup_printf ("%d", (guint16) (term_conf.foreground_color.green * G_MAXUINT16));
@@ -1256,6 +1070,7 @@ void config_fg_color(GtkWidget *button, gpointer data)
 	string = g_strdup_printf ("%d", (guint16) (term_conf.foreground_color.blue * G_MAXUINT16));
 	cfgStoreValue (cfg, "term_foreground_blue", string, CFG_INI, 0);
 	g_free (string);
+#endif
 }
 
 void config_bg_color(GtkWidget *button, gpointer data)
@@ -1267,7 +1082,7 @@ void config_bg_color(GtkWidget *button, gpointer data)
 	vte_terminal_set_color_background (VTE_TERMINAL(display), (const GdkRGBA *)&term_conf.background_color);
 	gtk_widget_queue_draw (display);
 
-	string = g_strdup_printf ("%u", (guint16) (term_conf.background_color.red * G_MAXUINT16));
+#if 0
 	cfgStoreValue (cfg, "term_background_red", string, CFG_INI, 0);
 	g_free (string);
 	string = g_strdup_printf ("%d", (guint16) (term_conf.background_color.green * G_MAXUINT16));
@@ -1276,6 +1091,7 @@ void config_bg_color(GtkWidget *button, gpointer data)
 	string = g_strdup_printf ("%d", (guint16) (term_conf.background_color.blue * G_MAXUINT16));
 	cfgStoreValue (cfg, "term_background_blue", string, CFG_INI, 0);
 	g_free (string);
+#endif
 }
 
 

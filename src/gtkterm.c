@@ -24,7 +24,6 @@
 #include "serie.h"
 #include "term_config.h"
 #include "cmdline.h"
-#include "parsecfg.h"
 #include "buffer.h"
 #include "macros.h"
 #include "auto_config.h"
