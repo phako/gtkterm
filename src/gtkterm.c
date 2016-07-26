@@ -16,6 +16,7 @@
 /*                                                                     */
 /***********************************************************************/
 
+#include <gio/gio.h>
 #include <gtk/gtk.h>
 #include <gdk/gdk.h>
 #include <stdlib.h>
@@ -30,6 +31,32 @@
 
 #include <config.h>
 #include <glib/gi18n.h>
+
+void migrate_config ()
+{
+    char *old_config_path = NULL;
+    GFile *old_config_file = NULL;
+    GDataInputStream *stream = NULL;
+    GInputStream *input_stream = NULL;
+    GError *error = NULL;
+    char *line = NULL;
+
+    old_config_file = g_build_filename (g_get_home_dir (), ".gtktermrc", NULL);
+    g_clear_pointer (&old_config_path);
+    file = g_file_new_for_commandline_arg (old_config_path);
+
+    if (!g_file_query_exists (file)) {
+        return;
+    }
+
+    input_stream = g_file_read (file, NULL, &error);
+    stream = g_data_input_stream_new (input_stream);
+    for (line = g_data_input_stream_read_line (stream, &length, NULL, &error);
+         line != NULL;
+         line = g_data_input_stream_read_line (stream, &length, NULL, &error)) {
+
+    }
+}
 
 int main(int argc, char *argv[])
 {

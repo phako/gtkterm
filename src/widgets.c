@@ -336,9 +336,6 @@ void create_main_window(void)
   Fenetre = GTK_WIDGET (gtk_builder_get_object (builder, "window-main"));
   gtk_widget_insert_action_group (Fenetre, "main", group);
 
-  shortcuts = gtk_accel_group_new();
-  gtk_window_add_accel_group(GTK_WINDOW(Fenetre), GTK_ACCEL_GROUP(shortcuts));
-
   g_signal_connect(GTK_WIDGET(Fenetre), "destroy", (GCallback)gtk_main_quit, NULL);
   g_signal_connect(GTK_WIDGET(Fenetre), "delete_event", (GCallback)gtk_main_quit, NULL);
   

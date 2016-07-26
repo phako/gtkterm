@@ -63,7 +63,7 @@ const gchar *devices_to_check[] = {
 
 gchar *config_file;
 
-struct configuration_port config;
+struct configuration_port port_conf;
 display_config_t term_conf;
 
 GtkWidget *Entry;
@@ -142,19 +142,19 @@ void Config_Port_Fenetre(GtkAction *action, gpointer data)
     g_list_free_full (device_list, g_free);
 
     /* Set values on first page */
-    if (config.port != NULL && config.port[0] != '\0') {
+    if (port_conf.port != NULL && port_conf.port[0] != '\0') {
         entry = gtk_bin_get_child (GTK_BIN (combo));
 
-        gtk_entry_set_text (GTK_ENTRY (entry), config.port);
+        gtk_entry_set_text (GTK_ENTRY (entry), port_conf.port);
     } else {
         gtk_combo_box_set_active (GTK_COMBO_BOX (combo), 0);
     }
 
     combo = GTK_WIDGET (gtk_builder_get_object (builder, "combo-baud-rate"));
-    rate = g_strdup_printf ("%d", config.vitesse);
+    rate = g_strdup_printf ("%d", port_conf.vitesse);
     entry = gtk_bin_get_child (GTK_BIN (combo));
 
-    if (config.vitesse == 0) {
+    if (port_conf.vitesse == 0) {
         gtk_combo_box_set_active_id (GTK_COMBO_BOX (combo), "9600");
     } else {
         if (!gtk_combo_box_set_active_id (GTK_COMBO_BOX (combo), rate)) {
@@ -164,18 +164,18 @@ void Config_Port_Fenetre(GtkAction *action, gpointer data)
     g_free (rate);
 
     combo = GTK_WIDGET (gtk_builder_get_object (builder, "combo-parity"));
-    rate = g_strdup_printf ("%d", config.parite);
+    rate = g_strdup_printf ("%d", port_conf.parite);
     gtk_combo_box_set_active_id (GTK_COMBO_BOX (combo), rate);
     g_free (rate);
 
     combo = GTK_WIDGET (gtk_builder_get_object (builder, "spin-bits"));
-    gtk_spin_button_set_value (GTK_SPIN_BUTTON (combo), config.bits);
+    gtk_spin_button_set_value (GTK_SPIN_BUTTON (combo), port_conf.bits);
 
     combo = GTK_WIDGET (gtk_builder_get_object (builder, "spin-stopbits"));
-    gtk_spin_button_set_value (GTK_SPIN_BUTTON (combo), config.stops);
+    gtk_spin_button_set_value (GTK_SPIN_BUTTON (combo), port_conf.stops);
 
     combo = GTK_WIDGET (gtk_builder_get_object (builder, "combo-flow"));
-    rate = g_strdup_printf ("%d", config.flux);
+    rate = g_strdup_printf ("%d", port_conf.flux);
     gtk_combo_box_set_active_id (GTK_COMBO_BOX (combo), rate);
     g_free (rate);
 
@@ -183,7 +183,7 @@ void Config_Port_Fenetre(GtkAction *action, gpointer data)
     {
         GtkWidget *spin;
         spin = GTK_WIDGET (gtk_builder_get_object (builder, "spin-eol-delay"));
-        gtk_spin_button_set_value (GTK_SPIN_BUTTON (spin), (gfloat) config.delai);
+        gtk_spin_button_set_value (GTK_SPIN_BUTTON (spin), (gfloat) port_conf.delai);
 
         combo = GTK_WIDGET (gtk_builder_get_object (builder, "check-use-wait-char"));
 
@@ -191,8 +191,8 @@ void Config_Port_Fenetre(GtkAction *action, gpointer data)
 
         Entry = combo = GTK_WIDGET (gtk_builder_get_object (builder, "entry-wait-char"));
 
-        if (config.car != -1) {
-            gtk_entry_set_text (GTK_ENTRY (combo), &(config.car));
+        if (port_conf.car != -1) {
+            gtk_entry_set_text (GTK_ENTRY (combo), &(port_conf.car));
             gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (combo), TRUE);
         }
     }
@@ -201,11 +201,11 @@ void Config_Port_Fenetre(GtkAction *action, gpointer data)
     {
         combo = GTK_WIDGET (gtk_builder_get_object (builder, "spin-rs485-on"));
         gtk_spin_button_set_value (GTK_SPIN_BUTTON (combo),
-                                   (gfloat) config.rs485_rts_time_before_transmit);
+                                   (gfloat) port_conf.rs485_rts_time_before_transmit);
 
         combo = GTK_WIDGET (gtk_builder_get_object (builder, "spin-rs485-off"));
         gtk_spin_button_set_value (GTK_SPIN_BUTTON (combo),
-                                   (gfloat) config.rs485_rts_time_after_transmit);
+                                   (gfloat) port_conf.rs485_rts_time_after_transmit);
     }
 
     result = gtk_dialog_run (dialog);
@@ -226,45 +226,45 @@ gint Lis_Config(GtkBuilder *builder)
 
     widget = gtk_builder_get_object (builder, "combo-device");
     message = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(widget));
-    strcpy(config.port, message);
+    strcpy(port_conf.port, message);
     g_free(message);
 
     widget = gtk_builder_get_object (builder, "combo-baud-rate");
     message = (char *) gtk_combo_box_get_active_id (GTK_COMBO_BOX (widget));
-    config.vitesse = atoi(message);
+    port_conf.vitesse = atoi(message);
 
     widget = gtk_builder_get_object (builder, "spin-bits");
-    config.bits = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (widget));
+    port_conf.bits = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (widget));
 
     widget = gtk_builder_get_object (builder, "spin-eol-delay");
-    config.delai = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget));
+    port_conf.delai = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget));
 
     widget = gtk_builder_get_object (builder, "spin-rs485-on");
-    config.rs485_rts_time_before_transmit = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget));
+    port_conf.rs485_rts_time_before_transmit = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget));
 
     widget = gtk_builder_get_object (builder, "spin-rs485-off");
-    config.rs485_rts_time_after_transmit = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget));
+    port_conf.rs485_rts_time_after_transmit = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget));
 
     widget = gtk_builder_get_object (builder, "combo-parity");
     message = (char *)gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
-    config.parite = atoi (message);
+    port_conf.parite = atoi (message);
 
     widget = gtk_builder_get_object (builder, "spin-bits");
-    config.stops = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (widget));
+    port_conf.stops = gtk_spin_button_get_value_as_int (GTK_SPIN_BUTTON (widget));
 
     widget = gtk_builder_get_object (builder, "combo-flow");
     message = (char *)gtk_combo_box_get_active_id(GTK_COMBO_BOX(widget));
-    config.flux = atoi (message);
+    port_conf.flux = atoi (message);
 
     widget = gtk_builder_get_object (builder, "check-use-wait-char");
     if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)))
     {
         widget = gtk_builder_get_object (builder, "entry-wait-char");
-        config.car = *gtk_entry_get_text(GTK_ENTRY(widget));
-        config.delai = 0;
+        port_conf.car = *gtk_entry_get_text(GTK_ENTRY(widget));
+        port_conf.delai = 0;
     }
     else
-        config.car = -1;
+        port_conf.car = -1;
 
     Config_port();
 
@@ -329,7 +329,7 @@ void Select_config(gchar *title, void *callback)
 {
     GtkWidget *dialog;
     GtkWidget *content_area;
-    gint i;
+    guint i;
 
     GtkWidget *Frame, *Scroll, *Liste, *Label;
     gchar *texte_label;
@@ -468,11 +468,8 @@ void Save_config_file(void)
 
 void really_save_config(GKeyFile *config, const char *section)
 {
-    int max, cfg_num, i;
     gchar *string = NULL;
     GError *error = NULL;
-
-    cfg_num = -1;
 
     Copy_configuration(config, section);
     g_key_file_save_to_file (config, config_file, &error);
@@ -484,7 +481,6 @@ void really_save_config(GKeyFile *config, const char *section)
 
 void save_config(GtkDialog *dialog, gint response_id, GtkWidget *edit)
 {
-	int max, i;
 	const gchar *config_name;
     GKeyFile *config;
     GError *error = NULL;
@@ -577,7 +573,6 @@ gint Load_configuration_from_file(const gchar *section)
     int value = 0;
 
     gchar *string = NULL;
-    macro_t *macros = NULL;
 
     config_object = g_key_file_new ();
     if (!g_key_file_load_from_file (config_object, config_file, G_KEY_FILE_NONE, &error)) {
@@ -599,61 +594,61 @@ gint Load_configuration_from_file(const gchar *section)
     Hard_default_configuration();
     str = g_key_file_get_string (config_object, section, "port", NULL);
     if (str != NULL) {
-        strncpy (config.port, str, sizeof (config.port));
+        strncpy (port_conf.port, str, sizeof (port_conf.port) - 1);
         g_free (str);
     }
 
     value = g_key_file_get_integer (config_object, section, "speed", NULL);
     if (value != 0) {
-        config.vitesse = value;
+        port_conf.vitesse = value;
     }
 
     value = g_key_file_get_integer (config_object, section, "bits", NULL);
     if (value != 0) {
-        config.bits = value;
+        port_conf.bits = value;
     }
 
     value = g_key_file_get_integer (config_object, section, "stopbits", NULL);
     if (value != 0) {
-        config.stops = value;
+        port_conf.stops = value;
     }
 
     str = g_key_file_get_string (config_object, section, "parity", NULL);
     if (str != NULL) {
         if(!g_ascii_strcasecmp(str, "none"))
-            config.parite = 0;
+            port_conf.parite = 0;
         else if(!g_ascii_strcasecmp(str, "odd"))
-            config.parite = 1;
+            port_conf.parite = 1;
         else if(!g_ascii_strcasecmp(str, "even"))
-            config.parite = 2;
+            port_conf.parite = 2;
         g_free (str);
     }
 
     str = g_key_file_get_string (config_object, section, "flow", NULL);
     if (str != NULL) {
         if(!g_ascii_strcasecmp(str, "none"))
-            config.flux = 0;
+            port_conf.flux = 0;
         else if(!g_ascii_strcasecmp(str, "xon"))
-            config.flux = 1;
+            port_conf.flux = 1;
         else if(!g_ascii_strcasecmp(str, "rts"))
-            config.flux = 2;
+            port_conf.flux = 2;
         else if(!g_ascii_strcasecmp(str, "rs485"))
-            config.flux = 3;
+            port_conf.flux = 3;
         g_free (str);
     }
 
-    config.delai = g_key_file_get_integer (config_object, section, "wait_delay", NULL);
+    port_conf.delai = g_key_file_get_integer (config_object, section, "wait_delay", NULL);
 
     value = g_key_file_get_integer (config_object, section, "wait_char", NULL);
     if (value != 0) {
-        config.car = (signed char) value;
+        port_conf.car = (signed char) value;
     } else {
-        config.car = -1;
+        port_conf.car = -1;
     }
-    config.rs485_rts_time_before_transmit = g_key_file_get_integer (config_object, section, "rs485_rts_time_before_tx", NULL);
-    config.rs485_rts_time_after_transmit = g_key_file_get_integer (config_object, section, "rs485_rts_time_after_tx", NULL);
-    config.echo = g_key_file_get_boolean (config_object, section, "echo", NULL);
-    config.crlfauto = g_key_file_get_boolean (config_object, section, "crlfauto", NULL);
+    port_conf.rs485_rts_time_before_transmit = g_key_file_get_integer (config_object, section, "rs485_rts_time_before_tx", NULL);
+    port_conf.rs485_rts_time_after_transmit = g_key_file_get_integer (config_object, section, "rs485_rts_time_after_tx", NULL);
+    port_conf.echo = g_key_file_get_boolean (config_object, section, "echo", NULL);
+    port_conf.crlfauto = g_key_file_get_boolean (config_object, section, "crlfauto", NULL);
 
         g_clear_pointer (&term_conf.font, pango_font_description_free);
     str = g_key_file_get_string (config_object, section, "font", NULL);
@@ -711,7 +706,7 @@ void Verify_configuration(void)
 {
     gchar *string = NULL;
 
-    switch(config.vitesse)
+    switch(port_conf.vitesse)
     {
 	case 300:
 	case 600:
@@ -726,32 +721,32 @@ void Verify_configuration(void)
 	    break;
 
 	default:
-	    string = g_strdup_printf(_("Unknown rate: %d baud\nMay not be supported by all hardware"), config.vitesse);
+	    string = g_strdup_printf(_("Unknown rate: %d baud\nMay not be supported by all hardware"), port_conf.vitesse);
 	    show_message(string, MSG_ERR);
 	    g_free(string);
     }
 
-    if(config.stops != 1 && config.stops != 2)
+    if(port_conf.stops != 1 && port_conf.stops != 2)
     {
-	string = g_strdup_printf(_("Invalid number of stop-bits: %d\nFalling back to default number of stop-bits number: %d\n"), config.stops, DEFAULT_STOP);
+	string = g_strdup_printf(_("Invalid number of stop-bits: %d\nFalling back to default number of stop-bits number: %d\n"), port_conf.stops, DEFAULT_STOP);
 	show_message(string, MSG_ERR);
-	config.stops = DEFAULT_STOP;
+	port_conf.stops = DEFAULT_STOP;
 	g_free(string);
     }
 
-    if(config.bits < 5 || config.bits > 8)
+    if(port_conf.bits < 5 || port_conf.bits > 8)
     {
-	string = g_strdup_printf(_("Invalid number of bits: %d\nFalling back to default number of bits: %d\n"), config.bits, DEFAULT_BITS);
+	string = g_strdup_printf(_("Invalid number of bits: %d\nFalling back to default number of bits: %d\n"), port_conf.bits, DEFAULT_BITS);
 	show_message(string, MSG_ERR);
-	config.bits = DEFAULT_BITS;
+	port_conf.bits = DEFAULT_BITS;
 	g_free(string);
     }
 
-    if(config.delai < 0 || config.delai > 500)
+    if(port_conf.delai < 0 || port_conf.delai > 500)
     {
-	string = g_strdup_printf(_("Invalid delay: %d ms\nFalling back to default delay: %d ms\n"), config.delai, DEFAULT_DELAY);
+	string = g_strdup_printf(_("Invalid delay: %d ms\nFalling back to default delay: %d ms\n"), port_conf.delai, DEFAULT_DELAY);
 	show_message(string, MSG_ERR);
-	config.delai = DEFAULT_DELAY;
+	port_conf.delai = DEFAULT_DELAY;
 	g_free(string);
     }
 
@@ -801,18 +796,18 @@ gint Check_configuration_file(void)
 
 void Hard_default_configuration(void)
 {
-    strcpy(config.port, DEFAULT_PORT);
-    config.vitesse = DEFAULT_SPEED;
-    config.parite = DEFAULT_PARITY;
-    config.bits = DEFAULT_BITS;
-    config.stops = DEFAULT_STOP;
-    config.flux = DEFAULT_FLOW;
-    config.delai = DEFAULT_DELAY;
-    config.rs485_rts_time_before_transmit = DEFAULT_DELAY_RS485;
-    config.rs485_rts_time_after_transmit = DEFAULT_DELAY_RS485;
-    config.car = DEFAULT_CHAR;
-    config.echo = DEFAULT_ECHO;
-    config.crlfauto = FALSE;
+    strcpy(port_conf.port, DEFAULT_PORT);
+    port_conf.vitesse = DEFAULT_SPEED;
+    port_conf.parite = DEFAULT_PARITY;
+    port_conf.bits = DEFAULT_BITS;
+    port_conf.stops = DEFAULT_STOP;
+    port_conf.flux = DEFAULT_FLOW;
+    port_conf.delai = DEFAULT_DELAY;
+    port_conf.rs485_rts_time_before_transmit = DEFAULT_DELAY_RS485;
+    port_conf.rs485_rts_time_after_transmit = DEFAULT_DELAY_RS485;
+    port_conf.car = DEFAULT_CHAR;
+    port_conf.echo = DEFAULT_ECHO;
+    port_conf.crlfauto = FALSE;
 
     term_conf.font = pango_font_description_from_string (DEFAULT_FONT);
 
@@ -826,18 +821,16 @@ void Hard_default_configuration(void)
     Selec_couleur(&term_conf.background_color, 0, 0, 0);
 }
 
-void Copy_configuration(GKeyFile *config_file, const char *section)
+void Copy_configuration(GKeyFile *configrc, const char *section)
 {
     gchar *string = NULL;
-    macro_t *macros = NULL;
-    gint size, i;
 
-    g_key_file_set_string (config_file, section, "port", config.port);
-    g_key_file_set_integer (config_file, section, "speed", config.vitesse);
-    g_key_file_set_integer (config_file, section,"bits", config.bits);
-    g_key_file_set_integer (config_file, section, "stopbits", config.stops);
+    g_key_file_set_string (configrc, section, "port", port_conf.port);
+    g_key_file_set_integer (configrc, section, "speed", port_conf.vitesse);
+    g_key_file_set_integer (configrc, section,"bits", port_conf.bits);
+    g_key_file_set_integer (configrc, section, "stopbits", port_conf.stops);
 
-    switch(config.parite)
+    switch(port_conf.parite)
     {
     case 0:
         string = g_strdup_printf("none");
@@ -851,10 +844,10 @@ void Copy_configuration(GKeyFile *config_file, const char *section)
     default:
         string = g_strdup_printf("none");
     }
-    g_key_file_set_string (config_file, section, "parity", string);
+    g_key_file_set_string (configrc, section, "parity", string);
     g_free(string);
 
-    switch(config.flux)
+    switch(port_conf.flux)
     {
     case 0:
         string = g_strdup_printf("none");
@@ -872,21 +865,21 @@ void Copy_configuration(GKeyFile *config_file, const char *section)
         string = g_strdup_printf("none");
     }
 
-    g_key_file_set_string (config_file, section, "flow", string);
+    g_key_file_set_string (configrc, section, "flow", string);
     g_free(string);
 
-    g_key_file_set_integer (config_file, section, "wait_delay", config.delai);
-    g_key_file_set_integer (config_file, section, "wait_char", config.car);
-    g_key_file_set_integer (config_file, section, "rs485_rts_time_before_tx",
-                            config.rs485_rts_time_before_transmit);
-    g_key_file_set_integer (config_file, section, "rs485_rts_time_after_tx",
-                            config.rs485_rts_time_after_transmit);
+    g_key_file_set_integer (configrc, section, "wait_delay", port_conf.delai);
+    g_key_file_set_integer (configrc, section, "wait_char", port_conf.car);
+    g_key_file_set_integer (configrc, section, "rs485_rts_time_before_tx",
+                            port_conf.rs485_rts_time_before_transmit);
+    g_key_file_set_integer (configrc, section, "rs485_rts_time_after_tx",
+                            port_conf.rs485_rts_time_after_transmit);
 
-    g_key_file_set_boolean (config_file, section, "echo", config.echo);
-    g_key_file_set_boolean (config_file, section, "crlfauto", config.crlfauto);
+    g_key_file_set_boolean (configrc, section, "echo", port_conf.echo);
+    g_key_file_set_boolean (configrc, section, "crlfauto", port_conf.crlfauto);
 
     string = pango_font_description_to_string (term_conf.font);
-    g_key_file_set_string (config_file, section, "font", string);
+    g_key_file_set_string (configrc, section, "font", string);
     g_free(string);
 
     /* FIXME: Fix macros! */
@@ -900,19 +893,19 @@ void Copy_configuration(GKeyFile *config_file, const char *section)
     }
 #endif
 
-    g_key_file_set_boolean (config_file, section, "term_show_cursor", term_conf.show_cursor);
-    g_key_file_set_integer (config_file, section, "term_show_rows", term_conf.rows);
-    g_key_file_set_integer (config_file, section, "term_show_columns", term_conf.columns);
-    g_key_file_set_integer (config_file, section, "term_show_scrollback", term_conf.scrollback);
-    g_key_file_set_boolean (config_file, section, "term_show_visual_bell", term_conf.visual_bell);
+    g_key_file_set_boolean (configrc, section, "term_show_cursor", term_conf.show_cursor);
+    g_key_file_set_integer (configrc, section, "term_show_rows", term_conf.rows);
+    g_key_file_set_integer (configrc, section, "term_show_columns", term_conf.columns);
+    g_key_file_set_integer (configrc, section, "term_show_scrollback", term_conf.scrollback);
+    g_key_file_set_boolean (configrc, section, "term_show_visual_bell", term_conf.visual_bell);
 
-    g_key_file_set_integer (config_file, section, "term_foreground_red", term_conf.foreground_color.red);
-    g_key_file_set_integer (config_file, section, "term_foreground_green", term_conf.foreground_color.green);
-    g_key_file_set_integer (config_file, section, "term_foreground_blue", term_conf.foreground_color.blue);
+    g_key_file_set_integer (configrc, section, "term_foreground_red", term_conf.foreground_color.red);
+    g_key_file_set_integer (configrc, section, "term_foreground_green", term_conf.foreground_color.green);
+    g_key_file_set_integer (configrc, section, "term_foreground_blue", term_conf.foreground_color.blue);
 
-    g_key_file_set_integer (config_file, section, "term_background_red", term_conf.background_color.red);
-    g_key_file_set_integer (config_file, section, "term_background_green", term_conf.background_color.green);
-    g_key_file_set_integer (config_file, section, "term_background_blue", term_conf.background_color.blue);
+    g_key_file_set_integer (configrc, section, "term_background_red", term_conf.background_color.red);
+    g_key_file_set_integer (configrc, section, "term_background_green", term_conf.background_color.green);
+    g_key_file_set_integer (configrc, section, "term_background_blue", term_conf.background_color.blue);
 }
 
 
@@ -1054,8 +1047,6 @@ void Selec_couleur(GdkRGBA *color, gfloat R, gfloat G, gfloat B)
 
 void config_fg_color(GtkWidget *button, gpointer data)
 {
-	gchar *string;
-
 	gtk_color_chooser_get_rgba (GTK_COLOR_CHOOSER (button), &term_conf.foreground_color);
 
 	vte_terminal_set_color_foreground (VTE_TERMINAL(display), (const GdkRGBA *)&term_conf.foreground_color);
@@ -1075,8 +1066,6 @@ void config_fg_color(GtkWidget *button, gpointer data)
 
 void config_bg_color(GtkWidget *button, gpointer data)
 {
-	gchar *string;
-
 	gtk_color_chooser_get_rgba (GTK_COLOR_CHOOSER (button), &term_conf.background_color);
 
 	vte_terminal_set_color_background (VTE_TERMINAL(display), (const GdkRGBA *)&term_conf.background_color);

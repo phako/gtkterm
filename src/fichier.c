@@ -67,7 +67,7 @@ gboolean idle(gpointer pointer);
 void remove_input(void);
 void write_file(char *, unsigned int);
 
-extern struct configuration_port config;
+extern struct configuration_port port_conf;
 
 void send_raw_file(GtkAction *action, gpointer data)
 {
@@ -181,7 +181,7 @@ void ecriture(gpointer data, gint source)
 
 	car = current_buffer;
 
-	if(config.delai != 0 || config.car != -1)
+	if(port_conf.delai != 0 || port_conf.car != -1)
 	{
 	    /* search for next LF */
 	    bytes_to_write = current_buffer_position;
@@ -213,13 +213,13 @@ void ecriture(gpointer data, gint source)
 
 	gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(ProgressBar), (gfloat)car_written/(gfloat)nb_car );
 
-	if(config.delai != 0 && *car == LINE_FEED)
+	if(port_conf.delai != 0 && *car == LINE_FEED)
 	{
 	    remove_input();
-	    g_timeout_add(config.delai, (GSourceFunc)timer, NULL);
+	    g_timeout_add(port_conf.delai, (GSourceFunc)timer, NULL);
 	    waiting_for_timer = TRUE;
 	}
-	else if(config.car != -1 && *car == LINE_FEED)
+	else if(port_conf.car != -1 && *car == LINE_FEED)
 	{
 	    remove_input();
 	    waiting_for_char = TRUE;

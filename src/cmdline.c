@@ -31,7 +31,7 @@
 #include <config.h>
 #include <glib/gi18n.h>
 
-extern struct configuration_port config;
+extern struct configuration_port port_conf;
 
 static void display_help(void)
 {
@@ -96,22 +96,22 @@ int read_command_line(int argc, char **argv, gchar *configuration_to_read)
 	break;
 
       case 's':
-	config.vitesse = atoi(optarg);
+	port_conf.vitesse = atoi(optarg);
 	break;
 
       case 'a':
 	if(!strcmp(optarg, "odd"))
-	  config.parite = 1;
+	  port_conf.parite = 1;
 	else if(!strcmp(optarg, "even"))
-	  config.parite = 2;
+	  port_conf.parite = 2;
 	break;
 
       case 't':
-	config.stops = atoi(optarg);
+	port_conf.stops = atoi(optarg);
 	break;
 
       case 'b':
-	config.bits = atoi(optarg);
+	port_conf.bits = atoi(optarg);
 	break;
 
       case 'f':
@@ -119,36 +119,36 @@ int read_command_line(int argc, char **argv, gchar *configuration_to_read)
 	break;
 
       case 'p':
-	strcpy(config.port, optarg);
+	strcpy(port_conf.port, optarg);
 	break;
 
       case 'w':
 	if(!strcmp(optarg, "Xon"))
-	  config.flux = 1;
+	  port_conf.flux = 1;
 	else if(!strcmp(optarg, "RTS"))
-	  config.flux = 2;
+	  port_conf.flux = 2;
 	else if(!strcmp(optarg, "RS485"))
-	  config.flux = 3;
+	  port_conf.flux = 3;
 	break;
 
       case 'd':
-	config.delai = atoi(optarg);
+	port_conf.delai = atoi(optarg);
 	break;
 
       case 'r':
-	config.car = *optarg;
+	port_conf.car = *optarg;
 	break;
 
       case 'e':
-	config.echo = TRUE;
+	port_conf.echo = TRUE;
 	break;
 
       case 'x':
-	config.rs485_rts_time_before_transmit = atoi(optarg);
+	port_conf.rs485_rts_time_before_transmit = atoi(optarg);
 	break;
 
       case 'y':
-	config.rs485_rts_time_after_transmit = atoi(optarg);
+	port_conf.rs485_rts_time_after_transmit = atoi(optarg);
 	break;
 
       case 'h':

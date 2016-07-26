@@ -57,7 +57,7 @@ guint callback_handler_in, callback_handler_err;
 gboolean callback_activated = FALSE;
 char lockfile[128] = {0};
 
-extern struct configuration_port config;
+extern struct configuration_port port_conf;
 
 /* Local functions prototype */
 gint create_lockfile(char *);
@@ -79,14 +79,14 @@ gboolean Lis_port(GIOChannel* src, GIOCondition cond, gpointer data)
 	bytes_read = read(serial_port_fd, c, BUFFER_RECEPTION);
 	if(bytes_read > 0)
 	{
-	    put_chars(c, bytes_read, config.crlfauto);
+	    put_chars(c, bytes_read, port_conf.crlfauto);
 
-	    if(config.car != -1 && waiting_for_char == TRUE)
+	    if(port_conf.car != -1 && waiting_for_char == TRUE)
 	    {
 		i = 0;
 		while(i < bytes_read)
 		{
-		    if(c[i] == config.car)
+		    if(c[i] == port_conf.car)
 		    {
 			waiting_for_char = FALSE;
 			add_input();
@@ -99,7 +99,7 @@ gboolean Lis_port(GIOChannel* src, GIOCondition cond, gpointer data)
 	else if(bytes_read == -1)
 	{
 	    if(errno != EAGAIN)
-		perror(config.port);
+		perror(port_conf.port);
 	}
     }
 
@@ -124,23 +124,23 @@ int Send_chars(char *string, int length)
 	return 0;
 
     /* RS485 half-duplex mode ? */
-    if( config.flux==3 )
+    if( port_conf.flux==3 )
     {
 	/* set RTS (start to send) */
 	Set_signals( 1 );
-	if( config.rs485_rts_time_before_transmit>0 )
-	    usleep(config.rs485_rts_time_before_transmit*1000);
+	if( port_conf.rs485_rts_time_before_transmit>0 )
+	    usleep(port_conf.rs485_rts_time_before_transmit*1000);
     }
 
     bytes_written = write(serial_port_fd, string, length);
 
     /* RS485 half-duplex mode ? */
-    if( config.flux==3 )
+    if( port_conf.flux==3 )
     {
 	/* wait all chars are send */
 	tcdrain( serial_port_fd );
-	if( config.rs485_rts_time_after_transmit>0 )
-	    usleep(config.rs485_rts_time_after_transmit*1000);
+	if( port_conf.rs485_rts_time_after_transmit>0 )
+	    usleep(port_conf.rs485_rts_time_after_transmit*1000);
 	/* reset RTS (end of send, now receiving back) */
 	Set_signals( 1 );
     }
@@ -161,20 +161,20 @@ gboolean Config_port(void)
     Ferme_Port();
     remove_lockfile();
 
-    Ouvre_Port(config.port);
+    Ouvre_Port(port_conf.port);
 
 
     if(serial_port_fd == -1)
     {
         msg = g_strdup_printf(_("Cannot open %s: %s\n"), 
-                              config.port, strerror_utf8(errno));
+                              port_conf.port, strerror_utf8(errno));
         show_message(msg, MSG_ERR);
         g_free(msg);
 
         return FALSE;
     }
 
-    if(create_lockfile(config.port) == -1)
+    if(create_lockfile(port_conf.port) == -1)
     {
         Ferme_Port();
         msg = g_strdup_printf(_("Cannot open create lockfile\n"));
@@ -187,7 +187,7 @@ gboolean Config_port(void)
     tcgetattr(serial_port_fd, &termios_p);
     memcpy(&termios_save, &termios_p, sizeof(struct termios));
 
-    switch(config.vitesse)
+    switch(port_conf.vitesse)
     {
 	case 300:
 	    termios_p.c_cflag = B300;
@@ -222,7 +222,7 @@ gboolean Config_port(void)
 
 	default:
 #ifdef HAVE_LINUX_SERIAL_H
-	    set_custom_speed(config.vitesse, serial_port_fd);
+	    set_custom_speed(port_conf.vitesse, serial_port_fd);
 	    termios_p.c_cflag |= B38400;
 #else
         Ferme_Port();
@@ -233,7 +233,7 @@ gboolean Config_port(void)
 #endif
     }
 
-    switch(config.bits)
+    switch(port_conf.bits)
     {
 	case 5:
 	    termios_p.c_cflag |= CS5;
@@ -250,7 +250,7 @@ gboolean Config_port(void)
     default:
         g_assert_not_reached();
     }
-    switch(config.parite)
+    switch(port_conf.parite)
     {
 	case 1:
 	    termios_p.c_cflag |= PARODD | PARENB;
@@ -261,11 +261,11 @@ gboolean Config_port(void)
 	default:
 	    break;
     }
-    if(config.stops == 2)
+    if(port_conf.stops == 2)
 	termios_p.c_cflag |= CSTOPB;
     termios_p.c_cflag |= CREAD;
     termios_p.c_iflag = IGNPAR | IGNBRK;
-    switch(config.flux)
+    switch(port_conf.flux)
     {
 	case 1:
 	    termios_p.c_iflag |= IXON | IXOFF;
@@ -299,19 +299,19 @@ gboolean Config_port(void)
 
     callback_activated = TRUE;
 
-    Set_local_echo(config.echo);
+    Set_local_echo(port_conf.echo);
 
     return TRUE;
 }
 
 void configure_echo(gboolean echo)
 {
-    config.echo = echo;
+    port_conf.echo = echo;
 }
 
 void configure_crlfauto(gboolean crlfauto)
 {
-    config.crlfauto = crlfauto;
+    port_conf.crlfauto = crlfauto;
 }
 
 void Ferme_Port(void)
@@ -372,7 +372,7 @@ int lis_sig(void)
     static int stat = 0;
     int stat_read;
 
-  if ( config.flux==3 )
+  if ( port_conf.flux==3 )
   {
     //reset RTS (default = receive)
     Set_signals( 1 );
@@ -560,7 +560,7 @@ gchar* get_port_string(void)
 	msg = g_strdup(_("No open port"));
     } else {
         // 0: none, 1: odd, 2: even
-	switch(config.parite)
+	switch(port_conf.parite)
 	{
 	    case 0:
 		parity = 'N';
@@ -577,11 +577,11 @@ gchar* get_port_string(void)
 
 	/* "GtkTerm: device  baud-bits-parity-stops"  */
 	msg = g_strdup_printf("%.15s  %d-%d-%c-%d",
-			      config.port,
-			      config.vitesse,
-			      config.bits,
+			      port_conf.port,
+			      port_conf.vitesse,
+			      port_conf.bits,
 			      parity,
-			      config.stops
+			      port_conf.stops
 			      );
     }
     
